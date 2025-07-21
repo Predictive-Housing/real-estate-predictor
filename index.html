@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Northern Westchester Real Estate Analytics</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <!-- React and Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <style>
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Fix for default markers in Leaflet
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({
+            iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        });
+
+        const RealEstatePredictiveApp = () => {
+            const [properties, setProperties] = useState([]);
+            const [filteredProperties, setFilteredProperties] = useState([]);
+            const [selectedProperty, setSelectedProperty] = useState(null);
+            const [viewMode, setViewMode] = useState('list');
+            const [map, setMap] = useState(null);
+            const [markers, setMarkers] = useState([]);
+            const [filters, setFilters] = useState({
+                minBeds: '',
+                maxBeds: '',
+                minBaths: '',
+                maxBaths: '',
+                minSqft: '',
+                maxSqft: '',
+                minAcres: '',
+                maxAcres: '',
+                district: '',
+                excludeMainRoad: false,
+                excludePowerLines: false
+            });
+
+            const mapRef = useRef(null);
+
+            // Generate realistic fake data
+            const generateProperties = () => {
+                const streetNames = [
+                    'Oak Ridge Drive', 'Maple Lane', 'Bedford Road', 'Guard Hill Road', 'Round Hill Road',
+                    'Chappaqua Road', 'Mt. Kisco Ave', 'Yorktown Heights Blvd', 'Croton Dam Road',
+                    'Whippoorwill Road', 'Millwood Road', 'North Castle Drive', 'Armonk Road',
+                    'Cross River Road', 'Katonah Avenue', 'Lewisboro Road', 'Salem Road', 'King Street',
+                    'Cantitoe Street', 'South Bedford Road', 'Greenwich Road', 'Long Ridge Road'
+                ];
+
+                const districts = ['Bedford Central', 'Chappaqua Central', 'Yorktown Central'];
+                const propertyTypes = ['Colonial', 'Contemporary', 'Tudor', 'Ranch', 'Cape Cod', 'Victorian', 'Split Level'];
+
+                const baseCoords = { lat: 41.2048, lng: -73.7032 };
+
+                const properties = [];
+
+                // Generate 150 sold properties
+                for (let i = 0; i < 150; i++) {
+                    const beds = Math.floor(Math.random() * 5) + 2;
+                    const baths = (Math.floor(Math.random() * 6) + 3) / 2; // 1.5 to 4.5
+                    const sqft = Math.floor(Math.random() * 6500) + 1500;
+                    const acres = +(Math.random() * 4.75 + 0.25).toFixed(2);
+                    const district = districts[Math.floor(Math.random() * districts.length)];
+                    
+                    // Price based on district and features
+                    let basePrice = district === 'Chappaqua Central' ? 1400000 : 
+                                   district === 'Bedford Central' ? 1200000 : 950000;
+                    
+                    const askingPrice = Math.floor(basePrice + 
+                        (beds - 3) * 120000 + 
+                        (baths - 2.5) * 80000 + 
+                        (sqft - 3000) * 150 + 
+                        (acres - 1.5) * 150000 + 
+                        (Math.random() * 600000 - 300000));
+
+                    const overAskingPercent = Math.random() * 0.2 - 0.08; // -8% to +12%
+                    const soldPrice = Math.floor(askingPrice * (1 + overAskingPercent));
+                    
+                    const listingDate = new Date(2024, Math.floor(Math.random() * 9), Math.floor(Math.random() * 28));
+                    const dom = Math.floor(Math.random() * 150) + 15;
+                    const saleDate = new Date(listingDate.getTime() + dom * 24 * 60 * 60 * 1000);
+
+                    properties.push({
+                        id: `sold-${i}`,
+                        address: `${Math.floor(Math.random() * 999) + 1} ${streetNames[Math.floor(Math.random() * streetNames.length)]}`,
+                        beds,
+                        baths,
+                        sqft,
+                        acres,
+                        district,
+                        askingPrice: Math.max(askingPrice, 800000),
+                        soldPrice: Math.max(soldPrice, 800000),
+                        listingDate,
+                        saleDate,
+                        dom,
+                        propertyType: propertyTypes[Math.floor(Math.random() * propertyTypes.length)],
+                        yearBuilt: Math.floor(Math.random() * 80) + 1940,
+                        onMainRoad: Math.random() < 0.15,
+                        nearPowerLines: Math.random() < 0.08,
+                        status: 'sold',
+                        lat: baseCoords.lat + (Math.random() - 0.5) * 0.4,
+                        lng: baseCoords.lng + (Math.random() - 0.5) * 0.4
+                    });
+                }
+
+                // Generate 50 active listings
+                for (let i = 0; i < 50; i++) {
+                    const beds = Math.floor(Math.random() * 5) + 2;
+                    const baths = (Math.floor(Math.random() * 6) + 3) / 2;
+                    const sqft = Math.floor(Math.random() * 6500) + 1500;
+                    const acres = +(Math.random() * 4.75 + 0.25).toFixed(2);
+                    const district = districts[Math.floor(Math.random() * districts.length)];
+                    
+                    let basePrice = district === 'Chappaqua Central' ? 1400000 : 
+                                   district === 'Bedford Central' ? 1200000 : 950000;
+                    
+                    const askingPrice = Math.floor(basePrice + 
+                        (beds - 3) * 120000 + 
+                        (baths - 2.5) * 80000 + 
+                        (sqft - 3000) * 150 + 
+                        (acres - 1.5) * 150000 + 
+                        (Math.random() * 600000 - 300000));
+
+                    const listingDate = new Date(2024, Math.floor(Math.random() * 4) + 8, Math.floor(Math.random() * 28));
+
+                    properties.push({
+                        id: `active-${i}`,
+                        address: `${Math.floor(Math.random() * 999) + 1} ${streetNames[Math.floor(Math.random() * streetNames.length)]}`,
+                        beds,
+                        baths,
+                        sqft,
+                        acres,
+                        district,
+                        askingPrice: Math.max(askingPrice, 800000),
+                        listingDate,
+                        propertyType: propertyTypes[Math.floor(Math.random() * propertyTypes.length)],
+                        yearBuilt: Math.floor(Math.random() * 80) + 1940,
+                        onMainRoad: Math.random() < 0.15,
+                        nearPowerLines: Math.random() < 0.08,
+                        status: 'active',
+                        lat: baseCoords.lat + (Math.random() - 0.5) * 0.4,
+                        lng: baseCoords.lng + (Math.random() - 0.5) * 0.4
+                    });
+                }
+
+                return properties;
+            };
+
+            // Predict sale price for active listings
+            const predictSalePrice = (property, soldProperties) => {
+                const comparables = soldProperties
+                    .filter(p => 
+                        Math.abs(p.beds - property.beds) <= 1 &&
+                        Math.abs(p.baths - property.baths) <= 1 &&
+                        Math.abs(p.sqft - property.sqft) <= 800 &&
+                        p.district === property.district
+                    )
+                    .sort((a, b) => {
+                        const scoreA = Math.abs(a.sqft - property.sqft) + Math.abs(a.beds - property.beds) * 100;
+                        const scoreB = Math.abs(b.sqft - property.sqft) + Math.abs(b.beds - property.beds) * 100;
+                        return scoreA - scoreB;
+                    })
+                    .slice(0, 8);
+
+                if (comparables.length === 0) {
+                    return property.askingPrice * 1.02;
+                }
+
+                const avgOverAskingRatio = comparables.reduce((sum, p) => 
+                    sum + (p.soldPrice / p.askingPrice), 0) / comparables.length;
+
+                return Math.floor(property.askingPrice * avgOverAskingRatio);
+            };
+
+            // Find similar properties
+            const findSimilarProperties = (property, soldProperties) => {
+                return soldProperties
+                    .filter(p => p.id !== property.id)
+                    .map(p => ({
+                        ...p,
+                        similarity: calculateSimilarity(property, p)
+                    }))
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, 5);
+            };
+
+            const calculateSimilarity = (prop1, prop2) => {
+                let score = 0;
+                
+                // District match (most important)
+                if (prop1.district === prop2.district) score += 40;
+                
+                // Beds similarity
+                score += Math.max(0, 20 - Math.abs(prop1.beds - prop2.beds) * 5);
+                
+                // Sqft similarity
+                score += Math.max(0, 20 - Math.abs(prop1.sqft - prop2.sqft) / 100);
+                
+                // Acres similarity
+                score += Math.max(0, 15 - Math.abs(prop1.acres - prop2.acres) * 3);
+                
+                // Year built similarity
+                score += Math.max(0, 5 - Math.abs(prop1.yearBuilt - prop2.yearBuilt) / 10);
+
+                return score;
+            };
+
+            // Apply filters
+            const applyFilters = () => {
+                let filtered = properties.filter(property => {
+                    if (filters.minBeds && property.beds < parseInt(filters.minBeds)) return false;
+                    if (filters.maxBeds && property.beds > parseInt(filters.maxBeds)) return false;
+                    if (filters.minBaths && property.baths < parseFloat(filters.minBaths)) return false;
+                    if (filters.maxBaths && property.baths > parseFloat(filters.maxBaths)) return false;
+                    if (filters.minSqft && property.sqft < parseInt(filters.minSqft)) return false;
+                    if (filters.maxSqft && property.sqft > parseInt(filters.maxSqft)) return false;
+                    if (filters.minAcres && property.acres < parseFloat(filters.minAcres)) return false;
+                    if (filters.maxAcres && property.acres > parseFloat(filters.maxAcres)) return false;
+                    if (filters.district && property.district !== filters.district) return false;
+                    if (filters.excludeMainRoad && property.onMainRoad) return false;
+                    if (filters.excludePowerLines && property.nearPowerLines) return false;
+                    
+                    return true;
+                });
+
+                setFilteredProperties(filtered);
+                updateMapMarkers(filtered);
+            };
+
+            // Update map markers
+            const updateMapMarkers = (propertiesToShow) => {
+                if (!map) return;
+
+                // Clear existing markers
+                markers.forEach(marker => map.removeLayer(marker));
+
+                // Add new markers
+                const newMarkers = propertiesToShow.map(property => {
+                    const marker = L.marker([property.lat, property.lng])
+                        .bindPopup(`
+                            <div class="p-2">
+                                <h3 class="font-semibold text-sm">${property.address}</h3>
+                                <p class="text-xs">${property.beds} bed, ${property.baths} bath</p>
+                                <p class="text-xs">${property.sqft.toLocaleString()} sqft, ${property.acres} acres</p>
+                                <p class="font-medium text-sm">
+                                    ${formatPrice(property.status === 'sold' ? property.soldPrice : property.askingPrice)}
+                                </p>
+                                ${property.status === 'active' ? 
+                                    `<p class="text-xs text-gray-600">Predicted: ${formatPrice(property.predictedPrice)}</p>` : 
+                                    ''
+                                }
+                            </div>
+                        `)
+                        .on('click', () => setSelectedProperty(property));
+
+                    map.addLayer(marker);
+                    return marker;
+                });
+
+                setMarkers(newMarkers);
+            };
+
+            // Calculate market statistics
+            const calculateStats = () => {
+                const soldProps = filteredProperties.filter(p => p.status === 'sold');
+                const activeProps = filteredProperties.filter(p => p.status === 'active');
+                
+                if (soldProps.length === 0) {
+                    return {
+                        avgAsking: 0,
+                        avgSold: 0,
+                        avgOverAsking: 0,
+                        avgDOM: 0,
+                        totalSold: 0,
+                        totalActive: activeProps.length
+                    };
+                }
+
+                const avgAsking = soldProps.reduce((sum, p) => sum + p.askingPrice, 0) / soldProps.length;
+                const avgSold = soldProps.reduce((sum, p) => sum + p.soldPrice, 0) / soldProps.length;
+                const avgOverAsking = ((avgSold - avgAsking) / avgAsking) * 100;
+                const avgDOM = soldProps.reduce((sum, p) => sum + p.dom, 0) / soldProps.length;
+
+                return {
+                    avgAsking: Math.floor(avgAsking),
+                    avgSold: Math.floor(avgSold),
+                    avgOverAsking: Math.round(avgOverAsking * 10) / 10,
+                    avgDOM: Math.round(avgDOM),
+                    totalSold: soldProps.length,
+                    totalActive: activeProps.length
+                };
+            };
+
+            const formatPrice = (price) => {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                }).format(price);
+            };
+
+            const formatDate = (date) => {
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            };
+
+            // Initialize map
+            useEffect(() => {
+                if (viewMode === 'map' && mapRef.current && !map) {
+                    const mapInstance = L.map(mapRef.current).setView([41.2048, -73.7032], 11);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    }).addTo(mapInstance);
+
+                    setMap(mapInstance);
+                }
+            }, [viewMode, map]);
+
+            useEffect(() => {
+                const generatedProperties = generateProperties();
+                
+                // Add predicted prices to active listings
+                const soldProperties = generatedProperties.filter(p => p.status === 'sold');
+                const processedProperties = generatedProperties.map(property => {
+                    if (property.status === 'active') {
+                        return {
+                            ...property,
+                            predictedPrice: predictSalePrice(property, soldProperties)
+                        };
+                    }
+                    return property;
+                });
+
+                setProperties(processedProperties);
+                setFilteredProperties(processedProperties);
+            }, []);
+
+            useEffect(() => {
+                applyFilters();
+            }, [filters, properties, map]);
+
+            const stats = calculateStats();
+            const soldProperties = properties.filter(p => p.status === 'sold');
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <div className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                            <h1 className="text-3xl font-bold text-gray-900">Northern Westchester Real Estate Analytics</h1>
+                            <p className="text-gray-600 mt-2">Predictive pricing for Bedford, Mt. Kisco, Chappaqua & Yorktown Heights</p>
+                        </div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {/* Market Statistics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-blue-600">{formatPrice(stats.avgAsking)}</div>
+                                <div className="text-sm text-gray-600">Avg Asking</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-green-600">{formatPrice(stats.avgSold)}</div>
+                                <div className="text-sm text-gray-600">Avg Sold</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-purple-600">{stats.avgOverAsking}%</div>
+                                <div className="text-sm text-gray-600">Avg Over Asking</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-orange-600">{stats.avgDOM}</div>
+                                <div className="text-sm text-gray-600">Avg Days on Market</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-gray-600">{stats.totalSold}</div>
+                                <div className="text-sm text-gray-600">Properties Sold</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-sm border">
+                                <div className="text-2xl font-bold text-red-600">{stats.totalActive}</div>
+                                <div className="text-sm text-gray-600">Active Listings</div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                            {/* Filters */}
+                            <div className="lg:col-span-1">
+                                <div className="bg-white p-6 rounded-lg shadow-sm border">
+                                    <h3 className="text-lg font-semibold mb-4">Filters</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Min Beds</label>
+                                                <select
+                                                    value={filters.minBeds}
+                                                    onChange={(e) => setFilters({...filters, minBeds: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="">Any</option>
+                                                    {[2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Max Beds</label>
+                                                <select
+                                                    value={filters.maxBeds}
+                                                    onChange={(e) => setFilters({...filters, maxBeds: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="">Any</option>
+                                                    {[2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Min Baths</label>
+                                                <select
+                                                    value={filters.minBaths}
+                                                    onChange={(e) => setFilters({...filters, minBaths: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="">Any</option>
+                                                    {[1.5,2,2.5,3,3.5,4,4.5].map(n => <option key={n} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Max Baths</label>
+                                                <select
+                                                    value={filters.maxBaths}
+                                                    onChange={(e) => setFilters({...filters, maxBaths: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="">Any</option>
+                                                    {[1.5,2,2.5,3,3.5,4,4.5].map(n => <option key={n} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">School District</label>
+                                            <select
+                                                value={filters.district}
+                                                onChange={(e) => setFilters({...filters, district: e.target.value})}
+                                                className="w-full p-2 border rounded-md text-sm"
+                                            >
+                                                <option value="">All Districts</option>
+                                                <option value="Bedford Central">Bedford Central</option>
+                                                <option value="Chappaqua Central">Chappaqua Central</option>
+                                                <option value="Yorktown Central">Yorktown Central</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Min Sqft</label>
+                                                <input
+                                                    type="number"
+                                                    value={filters.minSqft}
+                                                    onChange={(e) => setFilters({...filters, minSqft: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                    placeholder="1500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Max Sqft</label>
+                                                <input
+                                                    type="number"
+                                                    value={filters.maxSqft}
+                                                    onChange={(e) => setFilters({...filters, maxSqft: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                    placeholder="8000"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Min Acres</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={filters.minAcres}
+                                                    onChange={(e) => setFilters({...filters, minAcres: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                    placeholder="0.25"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Max Acres</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={filters.maxAcres}
+                                                    onChange={(e) => setFilters({...filters, maxAcres: e.target.value})}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                    placeholder="5.0"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={filters.excludeMainRoad}
+                                                    onChange={(e) => setFilters({...filters, excludeMainRoad: e.target.checked})}
+                                                    className="mr-2"
+                                                />
+                                                <span className="text-sm text-gray-700">Exclude Main Road</span>
+                                            </label>
+                                            <label className="flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={filters.excludePowerLines}
+                                                    onChange={(e) => setFilters({...filters, excludePowerLines: e.target.checked})}
+                                                    className="mr-2"
+                                                />
+                                                <span className="text-sm text-gray-700">Exclude Power Lines</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Main Content */}
+                            <div className="lg:col-span-3">
+                                {/* View Toggle */}
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex bg-gray-200 rounded-lg p-1">
+                                        <button
+                                            onClick={() => setViewMode('list')}
+                                            className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                                viewMode === 'list' 
+                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            List View
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('map')}
+                                            className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                                viewMode === 'map' 
+                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            Map View
+                                        </button>
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        {filteredProperties.length} properties found
+                                    </div>
+                                </div>
+
+                                {viewMode === 'list' ? (
+                                    <div className="space-y-4 max-h-screen overflow-y-auto">
+                                        {filteredProperties.map(property => (
+                                            <div
+                                                key={property.id}
+                                                className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow cursor-pointer"
+                                                onClick={() => setSelectedProperty(property)}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <h3 className="text-lg font-semibold text-gray-900">{property.address}</h3>
+                                                            <span className={`px-2 py-1 text-xs rounded-full ${
+                                                                property.status === 'sold' 
+                                                                    ? 'bg-green-100 text-green-800' 
+                                                                    : 'bg-blue-100 text-blue-800'
+                                                            }`}>
+                                                                {property.status === 'sold' ? 'Sold' : 'Active'}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                                                            <div className="text-sm">
+                                                                <span className="text-gray-600">Beds:</span> <span className="font-medium">{property.beds}</span>
+                                                            </div>
+                                                            <div className="text-sm">
+                                                                <span className="text-gray-600">Baths:</span> <span className="font-medium">{property.baths}</span>
+                                                            </div>
+                                                            <div className="text-sm">
+                                                                <span className="text-gray-600">Sqft:</span> <span className="font-medium">{property.sqft.toLocaleString()}</span>
+                                                            </div>
+                                                            <div className="text-sm">
+                                                                <span className="text-gray-600">Acres:</span> <span className="font-medium">{property.acres}</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="text-sm text-gray-600">
+                                                            {property.district} • {property.propertyType} • Built {property.yearBuilt}
+                                                        </div>
+                                                        
+                                                        {(property.onMainRoad || property.nearPowerLines) && (
+                                                            <div className="mt-2 flex gap-2">
+                                                                {property.onMainRoad && (
+                                                                    <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                                                        Main Road
+                                                                    </span>
+                                                                )}
+                                                                {property.nearPowerLines && (
+                                                                    <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">
+                                                                        Power Lines
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="text-right">
+                                                        <div className="text-2xl font-bold text-gray-900">
+                                                            {formatPrice(property.status === 'sold' ? property.soldPrice : property.askingPrice)}
+                                                        </div>
+                                                        {property.status === 'sold' ? (
+                                                            <div className="text-sm text-gray-600">
+                                                                Asked: {formatPrice(property.askingPrice)}
+                                                                <br />
+                                                                <span className={`font-medium ${
+                                                                    property.soldPrice > property.askingPrice ? 'text-green-600' : 'text-red-600'
+                                                                }`}>
+                                                                    {property.soldPrice > property.askingPrice ? '+' : ''}
+                                                                    {Math.round(((property.soldPrice - property.askingPrice) / property.askingPrice) * 100)}%
+                                                                </span>
+                                                                <br />
+                                                                {property.dom} days on market
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-sm text-gray-600">
+                                                                Predicted: {formatPrice(property.predictedPrice)}
+                                                                <br />
+                                                                Listed: {formatDate(property.listingDate)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                                        <div style={{ height: '600px' }} ref={mapRef}>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Property Detail Modal */}
+                    {selectedProperty && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-gray-900">{selectedProperty.address}</h2>
+                                            <p className="text-gray-600">{selectedProperty.district}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedProperty(null)}
+                                            className="text-gray-400 hover:text-gray-600 text-2xl"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div>
+                                            <h3 className="text-lg font-semibold mb-4">Property Details</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Bedrooms:</span>
+                                                    <span className="font-medium">{selectedProperty.beds}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Bathrooms:</span>
+                                                    <span className="font-medium">{selectedProperty.baths}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Square Footage:</span>
+                                                    <span className="font-medium">{selectedProperty.sqft.toLocaleString()}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Lot Size:</span>
+                                                    <span className="font-medium">{selectedProperty.acres} acres</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Property Type:</span>
+                                                    <span className="font-medium">{selectedProperty.propertyType}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Year Built:</span>
+                                                    <span className="font-medium">{selectedProperty.yearBuilt}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Status:</span>
+                                                    <span className={`font-medium ${
+                                                        selectedProperty.status === 'sold' ? 'text-green-600' : 'text-blue-600'
+                                                    }`}>
+                                                        {selectedProperty.status === 'sold' ? 'Sold' : 'Active'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6">
+                                                <h4 className="font-semibold mb-2">Price Information</h4>
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Asking Price:</span>
+                                                        <span className="font-medium">{formatPrice(selectedProperty.askingPrice)}</span>
+                                                    </div>
+                                                    {selectedProperty.status === 'sold' ? (
+                                                        <>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-600">Sold Price:</span>
+                                                                <span className="font-medium">{formatPrice(selectedProperty.soldPrice)}</span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-600">Over/Under Asking:</span>
+                                                                <span className={`font-medium ${
+                                                                    selectedProperty.soldPrice > selectedProperty.askingPrice ? 'text-green-600' : 'text-red-600'
+                                                                }`}>
+                                                                    {selectedProperty.soldPrice > selectedProperty.askingPrice ? '+' : ''}
+                                                                    {Math.round(((selectedProperty.soldPrice - selectedProperty.askingPrice) / selectedProperty.askingPrice) * 100)}%
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex justify-between">
+                                                                <span className="text-gray-600">Days on Market:</span>
+                                                                <span className="font-medium">{selectedProperty.dom}</span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-600">Predicted Sale Price:</span>
+                                                            <span className="font-medium text-green-600">{formatPrice(selectedProperty.predictedPrice)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <h3 className="text-lg font-semibold mb-4">Similar Properties</h3>
+                                            <div className="space-y-4">
+                                                {findSimilarProperties(selectedProperty, soldProperties).map(similar => (
+                                                    <div key={similar.id} className="border rounded-lg p-4">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="text-sm font-medium">{similar.address}</div>
+                                                            <div className="text-sm font-semibold">{formatPrice(similar.soldPrice)}</div>
+                                                        </div>
+                                                        <div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
+                                                            <div>{similar.beds} bed, {similar.baths} bath</div>
+                                                            <div>{similar.sqft.toLocaleString()} sqft</div>
+                                                            <div>{similar.acres} acres</div>
+                                                            <div>{similar.dom} DOM</div>
+                                                        </div>
+                                                        <div className="mt-2 text-xs">
+                                                            <span className="text-gray-600">Asked:</span> {formatPrice(similar.askingPrice)}
+                                                            <span className={`ml-2 ${
+                                                                similar.soldPrice > similar.askingPrice ? 'text-green-600' : 'text-red-600'
+                                                            }`}>
+                                                                ({similar.soldPrice > similar.askingPrice ? '+' : ''}
+                                                                {Math.round(((similar.soldPrice - similar.askingPrice) / similar.askingPrice) * 100)}%)
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<RealEstatePredictiveApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
