@@ -69,6 +69,7 @@
             const [viewMode, setViewMode] = useState('list');
             const [map, setMap] = useState(null);
             const [markers, setMarkers] = useState([]);
+            const [dataSource, setDataSource] = useState('sample'); // 'sample' or 'redfin'
             const [filters, setFilters] = useState({
                 minBeds: '',
                 maxBeds: '',
@@ -81,8 +82,12 @@
                 district: '',
                 status: '',
                 excludeMainRoad: false,
-                excludePowerLines: false
+                excludePowerLines: false,
+                soldWithinDays: '',
+                listedWithinDays: ''
             });
+            const [sortBy, setSortBy] = useState('listingDate'); // 'listingDate', 'soldDate', 'price'
+            const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
 
             const mapRef = useRef(null);
 
@@ -356,8 +361,10 @@
                 return score;
             };
 
-            // Apply filters
+            // Apply filters and sorting
             const applyFilters = () => {
+                const now = new Date();
+                
                 let filtered = properties.filter(property => {
                     if (filters.minBeds && property.beds < parseInt(filters.minBeds)) return false;
                     if (filters.maxBeds && property.beds > parseInt(filters.maxBeds)) return false;
@@ -372,7 +379,39 @@
                     if (filters.excludeMainRoad && property.onMainRoad) return false;
                     if (filters.excludePowerLines && property.nearPowerLines) return false;
                     
+                    // Filter by sold within X days
+                    if (filters.soldWithinDays && property.status === 'sold') {
+                        const daysSinceSold = Math.floor((now - property.saleDate) / (1000 * 60 * 60 * 24));
+                        if (daysSinceSold > parseInt(filters.soldWithinDays)) return false;
+                    }
+                    
+                    // Filter by listed within X days
+                    if (filters.listedWithinDays) {
+                        const daysSinceListed = Math.floor((now - property.listingDate) / (1000 * 60 * 60 * 24));
+                        if (daysSinceListed > parseInt(filters.listedWithinDays)) return false;
+                    }
+                    
                     return true;
+                });
+
+                // Apply sorting
+                filtered.sort((a, b) => {
+                    let comparison = 0;
+                    
+                    if (sortBy === 'listingDate') {
+                        comparison = a.listingDate - b.listingDate;
+                    } else if (sortBy === 'soldDate') {
+                        // Only sort sold properties by sale date, others by listing date
+                        const dateA = a.status === 'sold' ? a.saleDate : a.listingDate;
+                        const dateB = b.status === 'sold' ? b.saleDate : b.listingDate;
+                        comparison = dateA - dateB;
+                    } else if (sortBy === 'price') {
+                        const priceA = a.status === 'sold' ? a.soldPrice : a.askingPrice;
+                        const priceB = b.status === 'sold' ? b.soldPrice : b.askingPrice;
+                        comparison = priceA - priceB;
+                    }
+                    
+                    return sortOrder === 'asc' ? comparison : -comparison;
                 });
 
                 setFilteredProperties(filtered);
@@ -477,27 +516,96 @@
             }, [viewMode, map]);
 
             useEffect(() => {
-                const generatedProperties = generateProperties();
+                // Try to load real data from multiple sources
+                let propertiesToUse = [];
                 
-                // Add predicted prices to active listings
-                const soldProperties = generatedProperties.filter(p => p.status === 'sold');
-                const processedProperties = generatedProperties.map(property => {
-                    if (property.status === 'active' || property.status === 'pending') {
-                        return {
-                            ...property,
-                            predictedPrice: predictSalePrice(property, soldProperties)
-                        };
-                    }
-                    return property;
-                });
+                // 1. Try loading from data-for-index.json file
+                fetch('./data-for-index.json')
+                    .then(response => response.json())
+                    .then(realData => {
+                        if (realData.properties && realData.properties.length > 0) {
+                            console.log('✅ Using real data from file:', realData.properties.length, 'properties');
+                            console.log('📊 Data source:', realData.source);
+                            console.log('🕐 Last updated:', realData.lastUpdated);
+                            
+                            propertiesToUse = realData.properties;
+                            setDataSource('redfin');
+                            
+                            // Process and set properties
+                            const soldProperties = propertiesToUse.filter(p => p.status === 'sold');
+                            const processedProperties = propertiesToUse.map(property => {
+                                if (property.status === 'active' || property.status === 'pending') {
+                                    return {
+                                        ...property,
+                                        predictedPrice: predictSalePrice(property, soldProperties)
+                                    };
+                                }
+                                return property;
+                            });
 
-                setProperties(processedProperties);
-                setFilteredProperties(processedProperties);
+                            setProperties(processedProperties);
+                            setFilteredProperties(processedProperties);
+                            return;
+                        }
+                        throw new Error('No properties in file');
+                    })
+                    .catch(() => {
+                        // 2. Fallback to localStorage
+                        const storedData = localStorage.getItem('redfinData');
+                        if (storedData) {
+                            try {
+                                const realData = JSON.parse(storedData);
+                                if (realData.properties && realData.properties.length > 0) {
+                                    console.log('Using real data from localStorage:', realData.properties.length, 'properties');
+                                    propertiesToUse = realData.properties;
+                                    setDataSource('redfin');
+                                    
+                                    // Process and set properties
+                                    const soldProperties = propertiesToUse.filter(p => p.status === 'sold');
+                                    const processedProperties = propertiesToUse.map(property => {
+                                        if (property.status === 'active' || property.status === 'pending') {
+                                            return {
+                                                ...property,
+                                                predictedPrice: predictSalePrice(property, soldProperties)
+                                            };
+                                        }
+                                        return property;
+                                    });
+
+                                    setProperties(processedProperties);
+                                    setFilteredProperties(processedProperties);
+                                    return;
+                                }
+                            } catch (error) {
+                                console.error('Error parsing stored data:', error);
+                            }
+                        }
+                        
+                        // 3. Final fallback to generated sample data
+                        console.log('⚠️ Using generated sample data - run data-collector.js to get real data');
+                        propertiesToUse = generateProperties();
+                        setDataSource('sample');
+                        
+                        // Process and set properties
+                        const soldProperties = propertiesToUse.filter(p => p.status === 'sold');
+                        const processedProperties = propertiesToUse.map(property => {
+                            if (property.status === 'active' || property.status === 'pending') {
+                                return {
+                                    ...property,
+                                    predictedPrice: predictSalePrice(property, soldProperties)
+                                };
+                            }
+                            return property;
+                        });
+
+                        setProperties(processedProperties);
+                        setFilteredProperties(processedProperties);
+                    });
             }, []);
 
             useEffect(() => {
                 applyFilters();
-            }, [filters, properties, map]);
+            }, [filters, properties, map, sortBy, sortOrder]);
 
             const stats = calculateStats();
             const soldProperties = properties.filter(p => p.status === 'sold');
@@ -506,8 +614,28 @@
                 <div className="min-h-screen bg-gray-50">
                     <div className="bg-white shadow-sm border-b">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                            <h1 className="text-3xl font-bold text-gray-900">Northern Westchester Real Estate Analytics</h1>
-                            <p className="text-gray-600 mt-2">Predictive pricing for Bedford, Mt. Kisco, Chappaqua & Yorktown Heights</p>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-900">Northern Westchester Real Estate Analytics</h1>
+                                    <p className="text-gray-600 mt-2">Predictive pricing for Bedford, Mt. Kisco, Chappaqua & Yorktown Heights</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                        dataSource === 'redfin' 
+                                            ? 'bg-green-100 text-green-800' 
+                                            : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                        {dataSource === 'redfin' ? '🔴 Live Redfin Data' : '📊 Sample Data'}
+                                    </span>
+                                    {dataSource === 'sample' && (
+                                        <div className="mt-2">
+                                            <a href="/load-real-data.html" className="text-sm text-blue-600 hover:underline">
+                                                Load Real Data →
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -677,6 +805,28 @@
                                             </div>
                                         </div>
 
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Sold Within Days</label>
+                                            <input
+                                                type="number"
+                                                value={filters.soldWithinDays}
+                                                onChange={(e) => setFilters({...filters, soldWithinDays: e.target.value})}
+                                                className="w-full p-2 border rounded-md text-sm"
+                                                placeholder="e.g. 30, 60, 90"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Listed Within Days</label>
+                                            <input
+                                                type="number"
+                                                value={filters.listedWithinDays}
+                                                onChange={(e) => setFilters({...filters, listedWithinDays: e.target.value})}
+                                                className="w-full p-2 border rounded-md text-sm"
+                                                placeholder="e.g. 7, 14, 30"
+                                            />
+                                        </div>
+
                                         <div className="space-y-2">
                                             <label className="flex items-center">
                                                 <input
@@ -696,6 +846,33 @@
                                                 />
                                                 <span className="text-sm text-gray-700">Exclude Power Lines</span>
                                             </label>
+                                        </div>
+
+                                        <div className="border-t pt-4 mt-4">
+                                            <h4 className="text-sm font-semibold mb-3">Sort Options</h4>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+                                                <select
+                                                    value={sortBy}
+                                                    onChange={(e) => setSortBy(e.target.value)}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="listingDate">Listing Date</option>
+                                                    <option value="soldDate">Sale Date</option>
+                                                    <option value="price">Price</option>
+                                                </select>
+                                            </div>
+                                            <div className="mt-3">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
+                                                <select
+                                                    value={sortOrder}
+                                                    onChange={(e) => setSortOrder(e.target.value)}
+                                                    className="w-full p-2 border rounded-md text-sm"
+                                                >
+                                                    <option value="desc">Newest/Highest First</option>
+                                                    <option value="asc">Oldest/Lowest First</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

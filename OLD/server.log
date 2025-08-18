@@ -1,0 +1,38 @@
+::1 - - [07/Aug/2025 16:58:40] "GET /load-real-data.html HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 16:58:40] code 404, message File not found
+::1 - - [07/Aug/2025 16:58:40] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [07/Aug/2025 16:59:10] "GET /auto-load-data.html HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 16:59:10] "GET /redfin-data.json HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 16:59:11] "GET / HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 16:59:18] "GET / HTTP/1.1" 304 -
+::1 - - [07/Aug/2025 16:59:23] "GET / HTTP/1.1" 304 -
+::1 - - [07/Aug/2025 16:59:24] "GET / HTTP/1.1" 304 -
+::1 - - [07/Aug/2025 19:20:43] "GET /load-real-data.html HTTP/1.1" 304 -
+::1 - - [07/Aug/2025 20:56:16] "GET /index-supabase.html HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 20:56:30] code 404, message File not found
+::1 - - [07/Aug/2025 20:56:30] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [07/Aug/2025 20:56:38] "GET /index-supabase.html HTTP/1.1" 200 -
+::1 - - [07/Aug/2025 20:56:38] code 404, message File not found
+::1 - - [07/Aug/2025 20:56:38] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [07/Aug/2025 20:56:39] code 404, message File not found
+::1 - - [07/Aug/2025 20:56:39] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [07/Aug/2025 20:57:54] code 404, message File not found
+::1 - - [07/Aug/2025 20:57:54] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+::1 - - [07/Aug/2025 21:09:35] "GET /supabase-app.html HTTP/1.1" 200 -
+::1 - - [10/Aug/2025 19:38:35] "GET / HTTP/1.1" 200 -
+::1 - - [10/Aug/2025 19:38:36] code 404, message File not found
+::1 - - [10/Aug/2025 19:38:36] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [10/Aug/2025 20:32:20] "GET / HTTP/1.1" 304 -
+::1 - - [10/Aug/2025 20:37:30] "GET /supabase-app.html HTTP/1.1" 304 -
+::1 - - [11/Aug/2025 22:08:47] "GET /supabase-app.html HTTP/1.1" 304 -
+::1 - - [11/Aug/2025 22:08:48] code 404, message File not found
+::1 - - [11/Aug/2025 22:08:48] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [11/Aug/2025 22:17:48] "GET /supabase-app.html HTTP/1.1" 200 -
+::1 - - [11/Aug/2025 22:17:49] code 404, message File not found
+::1 - - [11/Aug/2025 22:17:49] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [11/Aug/2025 22:21:54] "GET /supabase-app.html HTTP/1.1" 304 -
+::1 - - [11/Aug/2025 23:12:13] "GET /supabase-app.html HTTP/1.1" 304 -
+::1 - - [11/Aug/2025 23:12:14] code 404, message File not found
+::1 - - [11/Aug/2025 23:12:14] "GET /favicon.ico HTTP/1.1" 404 -
+::1 - - [12/Aug/2025 08:45:24] code 404, message File not found
+::1 - - [12/Aug/2025 08:45:24] "GET /favicon.ico HTTP/1.1" 404 -

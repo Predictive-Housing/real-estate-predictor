@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Load Real Estate Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50 p-8">
+        <div class="max-w-4xl mx-auto">
+            <h1 class="text-3xl font-bold mb-8">Auto-Loading Real Estate Data</h1>
+            <div id="status" class="bg-white rounded-lg shadow p-6">
+                <p class="text-lg">Loading data from redfin-data.json...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Automatically load the redfin-data.json file
+        async function autoLoadData() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                // Fetch the JSON file from the server
+                const response = await fetch('/redfin-data.json');
+                const data = await response.json();
+                
+                // Store in localStorage
+                localStorage.setItem('redfinData', JSON.stringify(data));
+                localStorage.setItem('dataSource', 'redfin');
+                
+                statusDiv.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-4 text-green-600">✅ Data Loaded Successfully!</h2>
+                    <p class="mb-2">Loaded ${data.properties ? data.properties.length : 0} properties</p>
+                    <p class="mb-4">Last updated: ${data.lastUpdated || 'Unknown'}</p>
+                    <a href="/" class="inline-block bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        Go to Main App →
+                    </a>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-4 text-red-600">❌ Error Loading Data</h2>
+                    <p class="mb-4">${error.message}</p>
+                    <p>Make sure redfin-data.json exists in the root directory.</p>
+                `;
+            }
+        }
+        
+        // Load data on page load
+        autoLoadData();
+    </script>
+</body>
+</html>

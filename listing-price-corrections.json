@@ -1,0 +1,68 @@
+{
+  "lastUpdated": "2025-01-12",
+  "source": "Manual verification from Redfin property pages",
+  "properties": {
+    "2 Stratford Dr": {
+      "listingPrice": 1525000,
+      "soldPrice": 1625000,
+      "soldDate": "2024-10-15",
+      "verified": true,
+      "notes": "User confirmed listing price from Redfin"
+    },
+    "185 Harriman Rd": {
+      "listingPrice": 899000,
+      "soldPrice": 999000,
+      "soldDate": "2024-09-20",
+      "verified": true,
+      "notes": "User confirmed listing price from Redfin"
+    },
+    "3 Meadow Ln": {
+      "listingPrice": 749000,
+      "soldPrice": 810000,
+      "verified": false,
+      "notes": "Estimated based on typical market conditions"
+    },
+    "12 Oak Ridge Rd": {
+      "listingPrice": 1299000,
+      "soldPrice": 1350000,
+      "verified": false,
+      "notes": "Estimated based on sale price and market trends"
+    },
+    "45 Hillside Ave": {
+      "listingPrice": 625000,
+      "soldPrice": 650000,
+      "verified": false,
+      "notes": "Estimated"
+    },
+    "8 Maple St": {
+      "listingPrice": 849000,
+      "soldPrice": 875000,
+      "verified": false,
+      "notes": "Estimated"
+    },
+    "22 Valley View Dr": {
+      "listingPrice": 1125000,
+      "soldPrice": 1200000,
+      "verified": false,
+      "notes": "Estimated"
+    },
+    "15 Pine Tree Ln": {
+      "listingPrice": 975000,
+      "soldPrice": 1025000,
+      "verified": false,
+      "notes": "Estimated"
+    },
+    "7 Sunset Rd": {
+      "listingPrice": 725000,
+      "soldPrice": 750000,
+      "verified": false,
+      "notes": "Estimated"
+    },
+    "19 Forest Glen": {
+      "listingPrice": 1399000,
+      "soldPrice": 1450000,
+      "verified": false,
+      "notes": "Estimated"
+    }
+  }
+}

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Northern Westchester Real Estate - Live Supabase Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        
+        // Initialize Supabase client
+        const supabaseUrl = 'https://hzgslrhafbksmdpgmzmk.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6Z3NscmhhZmJrc21kcGdtem1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMwNjQ4NzksImV4cCI6MjA2ODY0MDg3OX0.CWb6ATPFbnpw5bIazoFrxd-x87qTECHRGxVfmJAMm5Q';
+        const { createClient } = supabase;
+        const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+        function App() {
+            const [properties, setProperties] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [filters, setFilters] = useState({
+                district: '',
+                minBeds: '',
+                maxBeds: '',
+                minBaths: '',
+                maxBaths: '',
+                minSqft: '',
+                maxSqft: '',
+                minAcres: '',
+                maxAcres: '',
+                status: '',
+                excludeMainRoad: false,
+                excludePowerLines: false,
+                soldWithinDays: '',
+                listedWithinDays: ''
+            });
+            const [sortBy, setSortBy] = useState('listingDate');
+            const [sortOrder, setSortOrder] = useState('desc');
+
+            // Fetch properties from Supabase
+            useEffect(() => {
+                fetchProperties();
+            }, []);
+
+            async function fetchProperties() {
+                try {
+                    setLoading(true);
+                    setError(null);
+                    
+                    const { data, error } = await supabaseClient
+                        .from('properties')
+                        .select('*')
+                        .order('listing_date', { ascending: false });
+                    
+                    if (error) throw error;
+                    
+                    // Transform the data to match the frontend format
+                    const transformedData = (data || []).map(prop => ({
+                        id: prop.id,
+                        address: prop.address || 'Address not available',
+                        beds: prop.beds || 0,
+                        baths: prop.baths || 0,
+                        sqft: prop.sqft || 0,
+                        acres: parseFloat(prop.acres) || 0,
+                        district: prop.district || 'Unknown',
+                        askingPrice: prop.asking_price || 0,
+                        soldPrice: prop.sold_price || 0,
+                        listingDate: prop.listing_date ? new Date(prop.listing_date) : new Date(),
+                        saleDate: prop.sale_date ? new Date(prop.sale_date) : null,
+                        dom: prop.dom || 0,
+                        propertyType: prop.property_type || 'Single Family',
+                        yearBuilt: prop.year_built,
+                        status: prop.status || 'active',
+                        lat: prop.lat || 41.2048,
+                        lng: prop.lng || -73.7032,
+                        onMainRoad: prop.on_main_road || false,
+                        nearPowerLines: prop.near_power_lines || false,
+                        redfinUrl: prop.redfin_url,
+                        description: prop.description
+                    }));
+                    
+                    setProperties(transformedData);
+                } catch (err) {
+                    setError(err.message);
+                    console.error('Error fetching properties:', err);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            // Filter properties
+            const filteredProperties = useMemo(() => {
+                return properties.filter(property => {
+                    if (filters.district && property.district !== filters.district) return false;
+                    if (filters.minBeds && property.beds < parseInt(filters.minBeds)) return false;
+                    if (filters.maxBeds && property.beds > parseInt(filters.maxBeds)) return false;
+                    if (filters.minBaths && property.baths < parseFloat(filters.minBaths)) return false;
+                    if (filters.maxBaths && property.baths > parseFloat(filters.maxBaths)) return false;
+                    if (filters.minSqft && property.sqft < parseInt(filters.minSqft)) return false;
+                    if (filters.maxSqft && property.sqft > parseInt(filters.maxSqft)) return false;
+                    if (filters.minAcres && property.acres < parseFloat(filters.minAcres)) return false;
+                    if (filters.maxAcres && property.acres > parseFloat(filters.maxAcres)) return false;
+                    if (filters.status && property.status !== filters.status) return false;
+                    if (filters.excludeMainRoad && property.onMainRoad) return false;
+                    if (filters.excludePowerLines && property.nearPowerLines) return false;
+                    
+                    if (filters.soldWithinDays && property.status === 'sold') {
+                        const daysSinceSold = Math.floor((new Date() - property.saleDate) / (1000 * 60 * 60 * 24));
+                        if (daysSinceSold > parseInt(filters.soldWithinDays)) return false;
+                    }
+                    
+                    if (filters.listedWithinDays) {
+                        const daysSinceListed = Math.floor((new Date() - property.listingDate) / (1000 * 60 * 60 * 24));
+                        if (daysSinceListed > parseInt(filters.listedWithinDays)) return false;
+                    }
+                    
+                    return true;
+                });
+            }, [properties, filters]);
+
+            // Sort properties
+            const sortedProperties = useMemo(() => {
+                const sorted = [...filteredProperties].sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    switch (sortBy) {
+                        case 'listingDate':
+                            aVal = a.listingDate;
+                            bVal = b.listingDate;
+                            break;
+                        case 'saleDate':
+                            aVal = a.saleDate || new Date(0);
+                            bVal = b.saleDate || new Date(0);
+                            break;
+                        case 'price':
+                            aVal = a.status === 'sold' ? a.soldPrice : a.askingPrice;
+                            bVal = b.status === 'sold' ? b.soldPrice : b.askingPrice;
+                            break;
+                        default:
+                            return 0;
+                    }
+                    
+                    if (sortOrder === 'desc') {
+                        return bVal > aVal ? 1 : -1;
+                    } else {
+                        return aVal > bVal ? 1 : -1;
+                    }
+                });
+                
+                return sorted;
+            }, [filteredProperties, sortBy, sortOrder]);
+
+            // Calculate statistics
+            const stats = useMemo(() => {
+                const soldProps = filteredProperties.filter(p => p.status === 'sold');
+                const activeProps = filteredProperties.filter(p => p.status === 'active');
+                const pendingProps = filteredProperties.filter(p => p.status === 'pending');
+                
+                const avgSoldPrice = soldProps.length > 0
+                    ? soldProps.reduce((sum, p) => sum + (p.soldPrice || 0), 0) / soldProps.length
+                    : 0;
+                
+                const avgDOM = soldProps.length > 0
+                    ? soldProps.reduce((sum, p) => sum + (p.dom || 0), 0) / soldProps.length
+                    : 0;
+                
+                const avgPricePerSqft = soldProps.filter(p => p.sqft > 0).length > 0
+                    ? soldProps.filter(p => p.sqft > 0).reduce((sum, p) => sum + ((p.soldPrice || 0) / p.sqft), 0) / 
+                      soldProps.filter(p => p.sqft > 0).length
+                    : 0;
+                
+                return {
+                    totalProperties: filteredProperties.length,
+                    activeListing: activeProps.length,
+                    pending: pendingProps.length,
+                    sold: soldProps.length,
+                    avgSoldPrice,
+                    avgDOM,
+                    avgPricePerSqft
+                };
+            }, [filteredProperties]);
+
+            // Format price safely
+            function formatPrice(price) {
+                const value = price || 0;
+                return value.toLocaleString();
+            }
+
+            // Format number safely
+            function formatNumber(num) {
+                const value = num || 0;
+                return value.toLocaleString();
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <div className="container mx-auto px-4 py-8">
+                        <div className="mb-8">
+                            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                                Northern Westchester Real Estate Analytics
+                            </h1>
+                            <p className="text-gray-600">
+                                Bedford, Mt. Kisco, Chappaqua & Yorktown Heights Market Data
+                            </p>
+                            <div className="mt-2 flex items-center gap-2">
+                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
+                                    🟢 Live Supabase Data
+                                </span>
+                                {loading && <span className="text-gray-500">Loading...</span>}
+                                {error && <span className="text-red-500">Error: {error}</span>}
+                                {!loading && !error && (
+                                    <span className="text-gray-500">
+                                        {properties.length} properties loaded
+                                    </span>
+                                )}
+                                <button
+                                    onClick={fetchProperties}
+                                    className="ml-2 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                >
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Filters */}
+                        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                            <h2 className="text-xl font-semibold mb-4">Filters</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        School District
+                                    </label>
+                                    <select
+                                        value={filters.district}
+                                        onChange={(e) => setFilters({...filters, district: e.target.value})}
+                                        className="w-full p-2 border rounded"
+                                    >
+                                        <option value="">All Districts</option>
+                                        <option value="Bedford Central">Bedford Central</option>
+                                        <option value="Chappaqua Central">Chappaqua Central</option>
+                                        <option value="Yorktown Central">Yorktown Central</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Status
+                                    </label>
+                                    <select
+                                        value={filters.status}
+                                        onChange={(e) => setFilters({...filters, status: e.target.value})}
+                                        className="w-full p-2 border rounded"
+                                    >
+                                        <option value="">All Status</option>
+                                        <option value="active">Active</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="sold">Sold</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Bedrooms
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            placeholder="Min"
+                                            value={filters.minBeds}
+                                            onChange={(e) => setFilters({...filters, minBeds: e.target.value})}
+                                            className="w-1/2 p-2 border rounded"
+                                        />
+                                        <input
+                                            type="number"
+                                            placeholder="Max"
+                                            value={filters.maxBeds}
+                                            onChange={(e) => setFilters({...filters, maxBeds: e.target.value})}
+                                            className="w-1/2 p-2 border rounded"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Square Feet
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            placeholder="Min"
+                                            value={filters.minSqft}
+                                            onChange={(e) => setFilters({...filters, minSqft: e.target.value})}
+                                            className="w-1/2 p-2 border rounded"
+                                        />
+                                        <input
+                                            type="number"
+                                            placeholder="Max"
+                                            value={filters.maxSqft}
+                                            onChange={(e) => setFilters({...filters, maxSqft: e.target.value})}
+                                            className="w-1/2 p-2 border rounded"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4 flex flex-wrap gap-4">
+                                <button
+                                    onClick={() => setFilters({
+                                        district: '',
+                                        minBeds: '',
+                                        maxBeds: '',
+                                        minBaths: '',
+                                        maxBaths: '',
+                                        minSqft: '',
+                                        maxSqft: '',
+                                        minAcres: '',
+                                        maxAcres: '',
+                                        status: '',
+                                        excludeMainRoad: false,
+                                        excludePowerLines: false,
+                                        soldWithinDays: '',
+                                        listedWithinDays: ''
+                                    })}
+                                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                                >
+                                    Clear Filters
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Stats Dashboard */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-white rounded-lg shadow p-4">
+                                <div className="text-sm text-gray-600">Total Properties</div>
+                                <div className="text-2xl font-bold">{stats.totalProperties}</div>
+                            </div>
+                            <div className="bg-white rounded-lg shadow p-4">
+                                <div className="text-sm text-gray-600">Active Listings</div>
+                                <div className="text-2xl font-bold text-green-600">{stats.activeListing}</div>
+                            </div>
+                            <div className="bg-white rounded-lg shadow p-4">
+                                <div className="text-sm text-gray-600">Pending</div>
+                                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                            </div>
+                            <div className="bg-white rounded-lg shadow p-4">
+                                <div className="text-sm text-gray-600">Sold</div>
+                                <div className="text-2xl font-bold text-blue-600">{stats.sold}</div>
+                            </div>
+                        </div>
+
+                        {/* Property List */}
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-semibold">Properties ({sortedProperties.length})</h2>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value)}
+                                        className="p-2 border rounded"
+                                    >
+                                        <option value="listingDate">Listing Date</option>
+                                        <option value="saleDate">Sale Date</option>
+                                        <option value="price">Price</option>
+                                    </select>
+                                    <select
+                                        value={sortOrder}
+                                        onChange={(e) => setSortOrder(e.target.value)}
+                                        className="p-2 border rounded"
+                                    >
+                                        <option value="desc">Newest/Highest First</option>
+                                        <option value="asc">Oldest/Lowest First</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full">
+                                    <thead>
+                                        <tr className="border-b">
+                                            <th className="text-left py-2">Address</th>
+                                            <th className="text-left py-2">Beds/Baths</th>
+                                            <th className="text-left py-2">Sqft</th>
+                                            <th className="text-left py-2">Listed Price</th>
+                                            <th className="text-left py-2">Sold Price</th>
+                                            <th className="text-left py-2">Difference</th>
+                                            <th className="text-left py-2">Status</th>
+                                            <th className="text-left py-2">District</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedProperties.slice(0, 50).map(property => (
+                                            <tr key={property.id} className="border-b hover:bg-gray-50">
+                                                <td className="py-2">
+                                                    {property.redfinUrl ? (
+                                                        <a href={property.redfinUrl} target="_blank" 
+                                                           className="text-blue-600 hover:underline">
+                                                            {property.address}
+                                                        </a>
+                                                    ) : property.address}
+                                                </td>
+                                                <td className="py-2">{property.beds}/{property.baths}</td>
+                                                <td className="py-2">{formatNumber(property.sqft)}</td>
+                                                <td className="py-2">
+                                                    {property.askingPrice > 0 ? `$${formatPrice(property.askingPrice)}` : '-'}
+                                                </td>
+                                                <td className="py-2">
+                                                    {property.soldPrice > 0 ? `$${formatPrice(property.soldPrice)}` : '-'}
+                                                </td>
+                                                <td className="py-2">
+                                                    {property.status === 'sold' && property.askingPrice > 0 && property.soldPrice > 0 ? (
+                                                        <span className={property.soldPrice > property.askingPrice ? 'text-green-600' : property.soldPrice < property.askingPrice ? 'text-red-600' : ''}>
+                                                            ${formatPrice(Math.abs(property.soldPrice - property.askingPrice))}
+                                                            {property.soldPrice > property.askingPrice ? ' ↑' : property.soldPrice < property.askingPrice ? ' ↓' : ''}
+                                                        </span>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="py-2">
+                                                    <span className={`px-2 py-1 rounded text-xs ${
+                                                        property.status === 'active' ? 'bg-green-100 text-green-800' :
+                                                        property.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                        'bg-blue-100 text-blue-800'
+                                                    }`}>
+                                                        {property.status}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2">{property.district}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

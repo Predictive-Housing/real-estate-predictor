@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.54.0",
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.2.1",
+    "pg": "^8.16.3",
+    "puppeteer": "^24.16.1"
+  }
+}
