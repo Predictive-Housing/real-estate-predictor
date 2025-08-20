@@ -495,7 +495,11 @@
             };
 
             const formatDate = (date) => {
-                return date.toLocaleDateString('en-US', {
+                // Handle both Date objects and strings
+                if (!date) return 'N/A';
+                const dateObj = typeof date === 'string' ? new Date(date) : date;
+                if (isNaN(dateObj.getTime())) return 'N/A';
+                return dateObj.toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric'
@@ -528,7 +532,13 @@
                             console.log('📊 Data source:', realData.source);
                             console.log('🕐 Last updated:', realData.lastUpdated);
                             
-                            propertiesToUse = realData.properties;
+                            // Parse dates from JSON strings to Date objects
+                            propertiesToUse = realData.properties.map(prop => ({
+                                ...prop,
+                                listingDate: prop.listingDate ? new Date(prop.listingDate) : null,
+                                saleDate: prop.saleDate ? new Date(prop.saleDate) : null,
+                                pendingDate: prop.pendingDate ? new Date(prop.pendingDate) : null
+                            }));
                             setDataSource('redfin');
                             
                             // Process and set properties
@@ -557,7 +567,13 @@
                                 const realData = JSON.parse(storedData);
                                 if (realData.properties && realData.properties.length > 0) {
                                     console.log('Using real data from localStorage:', realData.properties.length, 'properties');
-                                    propertiesToUse = realData.properties;
+                                    // Parse dates from JSON strings to Date objects
+                                    propertiesToUse = realData.properties.map(prop => ({
+                                        ...prop,
+                                        listingDate: prop.listingDate ? new Date(prop.listingDate) : null,
+                                        saleDate: prop.saleDate ? new Date(prop.saleDate) : null,
+                                        pendingDate: prop.pendingDate ? new Date(prop.pendingDate) : null
+                                    }));
                                     setDataSource('redfin');
                                     
                                     // Process and set properties
