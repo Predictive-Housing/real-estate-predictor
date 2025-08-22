@@ -946,6 +946,17 @@
                                                             }`}>
                                                                 {property.status === 'sold' ? 'Sold' : property.status === 'pending' ? 'Pending' : 'Active'}
                                                             </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    // Open Redfin search for this address
+                                                                    const searchUrl = `https://www.redfin.com/searchpage?query=${encodeURIComponent(property.address)}`;
+                                                                    window.open(searchUrl, '_blank');
+                                                                }}
+                                                                className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
+                                                            >
+                                                                Search on Redfin
+                                                            </button>
                                                         </div>
                                                         
                                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
@@ -1037,6 +1048,15 @@
                                         <div>
                                             <h2 className="text-2xl font-bold text-gray-900">{selectedProperty.address}</h2>
                                             <p className="text-gray-600">{selectedProperty.district}</p>
+                                            <button
+                                                onClick={() => {
+                                                    const searchUrl = `https://www.redfin.com/searchpage?query=${encodeURIComponent(selectedProperty.address)}`;
+                                                    window.open(searchUrl, '_blank');
+                                                }}
+                                                className="mt-3 inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                                            >
+                                                🏠 Search on Redfin
+                                            </button>
                                         </div>
                                         <button
                                             onClick={() => setSelectedProperty(null)}
