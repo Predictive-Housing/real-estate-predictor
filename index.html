@@ -70,6 +70,7 @@
             const [map, setMap] = useState(null);
             const [markers, setMarkers] = useState([]);
             const [dataSource, setDataSource] = useState('sample'); // 'sample' or 'redfin'
+            const [redfinUrlMapping, setRedfinUrlMapping] = useState({});
             const [filters, setFilters] = useState({
                 minBeds: '',
                 maxBeds: '',
@@ -506,6 +507,37 @@
                 });
             };
 
+            // Get Redfin URL for a property
+            const getRedfinUrl = (property) => {
+                if (!property || !property.address) return null;
+                
+                // Try different address formats to find a match
+                const addressLower = property.address.toLowerCase();
+                
+                // Try exact match first
+                if (redfinUrlMapping[addressLower]) {
+                    return redfinUrlMapping[addressLower];
+                }
+                
+                // Try without zip code
+                const addressParts = property.address.split(',');
+                if (addressParts.length >= 2) {
+                    const shortAddress = `${addressParts[0]}, ${addressParts[1]}`.toLowerCase().trim();
+                    if (redfinUrlMapping[shortAddress]) {
+                        return redfinUrlMapping[shortAddress];
+                    }
+                    
+                    // Try without commas
+                    const simpleAddress = `${addressParts[0]} ${addressParts[1]}`.toLowerCase().trim();
+                    if (redfinUrlMapping[simpleAddress]) {
+                        return redfinUrlMapping[simpleAddress];
+                    }
+                }
+                
+                // No match found
+                return null;
+            };
+
             // Initialize map
             useEffect(() => {
                 if (viewMode === 'map' && mapRef.current && !map) {
@@ -520,6 +552,17 @@
             }, [viewMode, map]);
 
             useEffect(() => {
+                // Load Redfin URL mapping
+                fetch('./redfin-url-mapping.json')
+                    .then(response => response.json())
+                    .then(mapping => {
+                        console.log('🔗 Loaded Redfin URL mapping:', Object.keys(mapping).length, 'addresses');
+                        setRedfinUrlMapping(mapping);
+                    })
+                    .catch(err => {
+                        console.log('⚠️ Could not load Redfin URL mapping:', err.message);
+                    });
+                
                 // Try to load real data from multiple sources
                 let propertiesToUse = [];
                 
@@ -946,17 +989,17 @@
                                                             }`}>
                                                                 {property.status === 'sold' ? 'Sold' : property.status === 'pending' ? 'Pending' : 'Active'}
                                                             </span>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    // Open Redfin search for this address
-                                                                    const searchUrl = `https://www.redfin.com/searchpage?query=${encodeURIComponent(property.address)}`;
-                                                                    window.open(searchUrl, '_blank');
-                                                                }}
-                                                                className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
-                                                            >
-                                                                Search on Redfin
-                                                            </button>
+                                                            {getRedfinUrl(property) && (
+                                                                <a
+                                                                    href={getRedfinUrl(property)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
+                                                                >
+                                                                    View on Redfin
+                                                                </a>
+                                                            )}
                                                         </div>
                                                         
                                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
@@ -1048,15 +1091,16 @@
                                         <div>
                                             <h2 className="text-2xl font-bold text-gray-900">{selectedProperty.address}</h2>
                                             <p className="text-gray-600">{selectedProperty.district}</p>
-                                            <button
-                                                onClick={() => {
-                                                    const searchUrl = `https://www.redfin.com/searchpage?query=${encodeURIComponent(selectedProperty.address)}`;
-                                                    window.open(searchUrl, '_blank');
-                                                }}
-                                                className="mt-3 inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-                                            >
-                                                🏠 Search on Redfin
-                                            </button>
+                                            {getRedfinUrl(selectedProperty) && (
+                                                <a
+                                                    href={getRedfinUrl(selectedProperty)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="mt-3 inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                                                >
+                                                    🏠 View on Redfin
+                                                </a>
+                                            )}
                                         </div>
                                         <button
                                             onClick={() => setSelectedProperty(null)}
